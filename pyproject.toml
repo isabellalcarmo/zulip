@@ -96,3 +96,25 @@ ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "zproject.settings"
+
+[tool.ruff]
+# See https://github.com/charliermarsh/ruff#rules for error code definitions.
+select = [
+    "B", # bugbear
+    "C", # comprehensions
+    "E", # style errors
+    "F", # flakes
+    "M", # meta
+    "U", # upgrade
+    "W", # style warnings
+]
+ignore = [
+    "B006", # Do not use mutable data structures for argument defaults
+    "B007", # Loop control variable not used within the loop body
+    "C408", # Unnecessary `dict` call (rewrite as a literal)
+    "E402", # Module level import not at top of file
+    "E501", # Line too long
+    "E731", # Do not assign a lambda expression, use a def
+]
+line-length = 100
+target-version = "py38"

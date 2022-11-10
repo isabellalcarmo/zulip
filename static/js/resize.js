@@ -16,30 +16,6 @@ import * as util from "./util";
 
 let narrow_window = false;
 
-function confine_to_range(lo, val, hi) {
-    if (val < lo) {
-        return lo;
-    }
-    if (val > hi) {
-        return hi;
-    }
-    return val;
-}
-
-function size_blocks(blocks, usable_height) {
-    let sum_height = 0;
-
-    for (const block of blocks) {
-        sum_height += block.real_height;
-    }
-
-    for (const block of blocks) {
-        let ratio = block.real_height / sum_height;
-        ratio = confine_to_range(0.05, ratio, 0.85);
-        block.max_height = confine_to_range(80, usable_height * ratio, 1.2 * block.real_height);
-    }
-}
-
 function get_new_heights() {
     const res = {};
     const viewport_height = message_viewport.height();
@@ -88,10 +64,10 @@ function left_userlist_get_new_heights() {
     res.main_div_min_height = viewport_height - top_navbar_height;
 
     // left sidebar
-    const $stream_filters = $("#stream_filters").expectOne();
+    const $stream_filters = $("#left_sidebar_scroll_container").expectOne();
     const $buddy_list_wrapper = $("#buddy_list_wrapper").expectOne();
 
-    const stream_filters_real_height = $stream_filters.prop("scrollHeight");
+    const stream_filters_real_height = ui.get_scroll_element($stream_filters).prop("scrollHeight");
     const user_list_real_height = ui.get_scroll_element($buddy_list_wrapper).prop("scrollHeight");
 
     res.total_leftlist_height =
@@ -104,20 +80,18 @@ function left_userlist_get_new_heights() {
         $("#user_search_section").safeOuterHeight(true) -
         $("#private_messages_sticky_header").safeOuterHeight(true);
 
-    const blocks = [
-        {
-            real_height: stream_filters_real_height,
-        },
-        {
-            real_height: user_list_real_height,
-        },
-    ];
-
-    size_blocks(blocks, res.total_leftlist_height);
-
-    res.stream_filters_max_height = blocks[0].max_height;
-    res.buddy_list_wrapper_max_height = blocks[1].max_height;
-
+    if (res.total_leftlist_height - user_list_real_height > stream_filters_real_height) {
+        // There is enough space for the both lists to be fully displayed.
+        res.stream_filters_max_height = "100%";
+        res.buddy_list_wrapper_max_height = "100%";
+    } else {
+        res.stream_filters_max_height = Math.min(
+            res.total_leftlist_height / 2,
+            stream_filters_real_height,
+        );
+        res.buddy_list_wrapper_max_height =
+            res.total_leftlist_height - res.stream_filters_max_height;
+    }
     return res;
 }
 
@@ -211,6 +185,9 @@ export function resize_stream_filters_container(h) {
     h = narrow_window ? left_userlist_get_new_heights() : get_new_heights();
     resize_bottom_whitespace(h);
     $("#left_sidebar_scroll_container").css("max-height", h.stream_filters_max_height);
+    if (user_settings.left_side_userlist) {
+        $("#buddy_list_wrapper").css("max-height", h.buddy_list_wrapper_max_height);
+    }
 }
 
 export function resize_sidebars() {

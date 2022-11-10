@@ -164,6 +164,17 @@ function set_table_focus(row, col, using_keyboard) {
         return true;
     }
 
+    const unread = has_unread(row);
+    if (col === 2 && !unread) {
+        col = 1;
+        col_focus = 1;
+    }
+    const type = get_row_type(row);
+    if (col === 3 && type === "private") {
+        col = unread ? 2 : 1;
+        col_focus = col;
+    }
+
     const $topic_row = $topic_rows.eq(row);
     // We need to allow table to render first before setting focus.
     setTimeout(
@@ -189,7 +200,6 @@ function set_table_focus(row, col, using_keyboard) {
     // TODO: This fake "message" object is designed to allow using the
     // get_recipient_label helper inside compose_closed_ui. Surely
     // there's a more readable way to write this code.
-    const type = get_row_type(row);
     let message;
     if (type === "private") {
         message = {
@@ -498,15 +508,35 @@ export function inplace_rerender(topic_key) {
     }
 
     const topic_data = topics.get(topic_key);
-    topics_widget.render_item(topic_data);
     const topic_row = get_topic_row(topic_data);
-
-    if (filters_should_hide_topic(topic_data)) {
-        topic_row.hide();
+    // We cannot rely on `topic_widget.meta.filtered_list` to know
+    // if a topic is rendered since the `filtered_list` might have
+    // already been updated via other calls.
+    const is_topic_rendered = topic_row.length;
+    // Resorting the topics_widget is important for the case where we
+    // are rerendering because of message editing or new messages
+    // arriving, since those operations often change the sort key.
+    topics_widget.filter_and_sort();
+    const current_topics_list = topics_widget.get_current_list();
+    if (is_topic_rendered && filters_should_hide_topic(topic_data)) {
+        const row_is_focused = get_focused_row_message().id === topic_data.last_msg_id;
+        if (row_is_focused && row_focus >= current_topics_list.length) {
+            row_focus = current_topics_list.length - 1;
+        }
+        topics_widget.remove_rendered_row(topic_row);
+    } else if (!is_topic_rendered && filters_should_hide_topic(topic_data)) {
+        // In case `topic_row` is not present, our job is already done here
+        // since it has not been rendered yet and we already removed it from
+        // the filtered list in `topic_widget`. So, it won't be displayed in
+        // the future too.
+    } else if (is_topic_rendered && !filters_should_hide_topic(topic_data)) {
+        // Only a re-render is required in this case.
+        topics_widget.render_item(topic_data);
     } else {
-        topic_row.show();
+        // Final case: !is_topic_rendered && !filters_should_hide_topic(topic_data).
+        topics_widget.insert_rendered_row(topic_data);
     }
-    revive_current_focus();
+    setTimeout(revive_current_focus, 0);
     return true;
 }
 
@@ -727,7 +757,7 @@ export function complete_rerender() {
         },
         html_selector: get_topic_row,
         $simplebar_container: $("#recent_topics_table .table_fix_head"),
-        callback_after_render: revive_current_focus,
+        callback_after_render: () => setTimeout(revive_current_focus, 0),
         is_scroll_position_for_render,
         post_scroll__pre_render_callback: set_focus_to_element_in_center,
         get_min_load_count,
@@ -872,13 +902,7 @@ function up_arrow_navigation(row, col) {
     }
 }
 
-function down_arrow_navigation(row, col) {
-    if (is_focus_at_last_table_row()) {
-        return;
-    }
-    if (col === 2 && !has_unread(row + 1)) {
-        col_focus = 1;
-    }
+function down_arrow_navigation() {
     row_focus += 1;
 }
 
@@ -1064,6 +1088,7 @@ export function change_focused_element($elt, input_key) {
             case "right_arrow":
                 right_arrow_navigation(row_focus, col_focus);
                 break;
+            case "down_arrow":
             case "vim_down":
                 // We stop user at last table row
                 // so that user doesn't end up in
@@ -1075,10 +1100,7 @@ export function change_focused_element($elt, input_key) {
                 if (is_focus_at_last_table_row()) {
                     return true;
                 }
-                down_arrow_navigation(row_focus, col_focus);
-                break;
-            case "down_arrow":
-                down_arrow_navigation(row_focus, col_focus);
+                down_arrow_navigation();
                 break;
             case "vim_up":
                 // See comment on vim_down.

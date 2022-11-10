@@ -260,7 +260,7 @@ def get_mentions_for_message_updates(message_id: int) -> Set[int]:
         )
         .values_list("user_profile_id", flat=True)
     )
-    return {user_profile_id for user_profile_id in mentioned_user_ids}
+    return set(mentioned_user_ids)
 
 
 def update_user_message_flags(
@@ -721,7 +721,7 @@ def do_update_message(
                 )
                 subscriber_ids = set(subscriptions.values_list("user_profile_id", flat=True))
 
-            users_to_be_notified += list(map(subscriber_info, sorted(list(subscriber_ids))))
+            users_to_be_notified += list(map(subscriber_info, sorted(subscriber_ids)))
 
     # UserTopic updates and the content of notifications depend on
     # whether we've moved the entire topic, or just part of it. We

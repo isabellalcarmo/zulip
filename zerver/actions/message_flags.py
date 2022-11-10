@@ -12,9 +12,10 @@ from zerver.actions.create_user import create_historical_user_messages
 from zerver.lib.exceptions import JsonableError
 from zerver.lib.message import access_message, format_unread_message_details, get_raw_unread_data
 from zerver.lib.queue import queue_json_publish
+from zerver.lib.stream_subscription import get_subscribed_stream_recipient_ids_for_user
 from zerver.lib.topic import filter_by_topic_name_via_message
 from zerver.lib.utils import log_statsd_event
-from zerver.models import Message, UserMessage, UserProfile
+from zerver.models import Message, Recipient, UserMessage, UserProfile
 from zerver.tornado.django_api import send_event
 
 
@@ -262,19 +263,56 @@ def do_update_message_flags(
     flagattr = getattr(UserMessage.flags, flag)
 
     with transaction.atomic(savepoint=False):
+        if flag == "read" and operation == "remove":
+            # We have an invariant that all stream messages marked as
+            # unread must be in streams the user is subscribed to.
+            #
+            # When marking as unread, we enforce this invariant by
+            # ignoring any messages in streams the user is not
+            # currently subscribed to.
+            subscribed_recipient_ids = get_subscribed_stream_recipient_ids_for_user(user_profile)
+
+            message_ids_in_unsubscribed_streams = set(
+                Message.objects.select_related("recipient")
+                .filter(id__in=messages, recipient__type=Recipient.STREAM)
+                .exclude(recipient_id__in=subscribed_recipient_ids)
+                .values_list("id", flat=True)
+            )
+
+            messages = [
+                message_id
+                for message_id in messages
+                if message_id not in message_ids_in_unsubscribed_streams
+            ]
+
         query = UserMessage.select_for_update_query().filter(
             user_profile=user_profile, message_id__in=messages
         )
+
         um_message_ids = {um.message_id for um in query}
-        historical_message_ids = list(set(messages) - um_message_ids)
+        if flag == "read" and operation == "add":
+            # When marking messages as read, creating "historical"
+            # UserMessage rows would be a waste of storage, because
+            # `flags.read | flags.historical` is exactly the flags we
+            # simulate when processing a message for which a user has
+            # access but no UserMessage row.
+            messages = [message_id for message_id in messages if message_id in um_message_ids]
+        else:
+            # Users can mutate flags for messages that don't have a
+            # UserMessage yet.  Validate that the user is even allowed
+            # to access these message_ids; if so, we will create
+            # "historical" UserMessage rows for the messages in question.
+            #
+            # See create_historical_user_messages for a more detailed
+            # explanation.
+            historical_message_ids = list(set(messages) - um_message_ids)
 
-        # Users can mutate flags for messages that don't have a UserMessage yet.
-        # First, validate that the user is even allowed to access these message_ids.
-        for message_id in historical_message_ids:
-            access_message(user_profile, message_id)
+            for message_id in historical_message_ids:
+                access_message(user_profile, message_id)
 
-        # And then create historical UserMessage records.  See the called function for more context.
-        create_historical_user_messages(user_id=user_profile.id, message_ids=historical_message_ids)
+            create_historical_user_messages(
+                user_id=user_profile.id, message_ids=historical_message_ids
+            )
 
         if operation == "add":
             count = query.update(flags=F("flags").bitor(flagattr))

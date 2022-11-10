@@ -137,6 +137,14 @@ class DocPageTest(ZulipTestCase):
         )
         self.assertEqual(result.status_code, 404)
 
+        result = self.client_get(
+            # This template shouldn't be accessed directly.
+            "/api/api-doc-template",
+            follow=True,
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(result.status_code, 404)
+
         # Test some API doc endpoints for specific content and metadata.
         self._test("/api/", "The Zulip API")
         self._test("/api/api-keys", "be careful with it")
@@ -172,10 +180,10 @@ class DocPageTest(ZulipTestCase):
             self._test("/team/", "industry veterans")
             self._test("/apps/", "Apps for every platform.")
 
-        self._test("/history/", "Cambridge, Massachusetts")
+        self._test("/history/", "Zulip released as open source!")
         # Test the i18n version of one of these pages.
-        self._test("/en/history/", "Cambridge, Massachusetts")
-
+        self._test("/en/history/", "Zulip released as open source!")
+        self._test("/values/", "designed our company")
         self._test("/hello/", "Chat for distributed teams", landing_missing_strings=["Log in"])
         self._test("/attribution/", "Website attributions")
         self._test("/communities/", "Open communities directory")

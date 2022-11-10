@@ -21,10 +21,12 @@ import * as drafts from "./drafts";
 import {DropdownListWidget} from "./dropdown_list_widget";
 import * as hash_util from "./hash_util";
 import {$t, $t_html} from "./i18n";
+import * as keydown_util from "./keydown_util";
 import * as message_edit from "./message_edit";
 import * as muted_topics_ui from "./muted_topics_ui";
 import {page_params} from "./page_params";
 import * as popovers from "./popovers";
+import * as resize from "./resize";
 import * as settings_data from "./settings_data";
 import * as starred_messages from "./starred_messages";
 import * as starred_messages_ui from "./starred_messages_ui";
@@ -168,6 +170,10 @@ export function hide_drafts_popover() {
 
 export function show_streamlist_sidebar() {
     $(".app-main .column-left").addClass("expanded");
+
+    // Redo the calculation for how large the sidebar is; this is
+    // important for the left_side_userlist setting.
+    resize.resize_stream_filters_container();
 }
 
 export function hide_streamlist_sidebar() {
@@ -244,8 +250,7 @@ function build_stream_popover(opts) {
         return;
     }
 
-    popovers.hide_all();
-    show_streamlist_sidebar();
+    popovers.hide_all_except_sidebars();
 
     const content = render_stream_sidebar_actions({
         stream: sub_store.get(stream_id),
@@ -287,8 +292,7 @@ function build_topic_popover(opts) {
         return;
     }
 
-    popovers.hide_all();
-    show_streamlist_sidebar();
+    popovers.hide_all_except_sidebars();
 
     const topic_muted = user_topics.is_topic_muted(sub.stream_id, topic_name);
     const has_starred_messages = starred_messages.get_count_in_topic(sub.stream_id, topic_name) > 0;
@@ -330,8 +334,7 @@ function build_all_messages_popover(e) {
         return;
     }
 
-    popovers.hide_all();
-    show_streamlist_sidebar();
+    popovers.hide_all_except_sidebars();
 
     const content = render_all_messages_sidebar_actions();
 
@@ -357,8 +360,7 @@ function build_starred_messages_popover(e) {
         return;
     }
 
-    popovers.hide_all();
-    show_streamlist_sidebar();
+    popovers.hide_all_except_sidebars();
 
     const show_unstar_all_button = starred_messages.get_count() > 0;
     const content = render_starred_messages_sidebar_actions({
@@ -388,8 +390,7 @@ function build_drafts_popover(e) {
         return;
     }
 
-    popovers.hide_all();
-    show_streamlist_sidebar();
+    popovers.hide_all_except_sidebars();
     const content = render_drafts_sidebar_actions({});
     $(elt).popover({
         content,
@@ -634,7 +635,7 @@ export function register_click_handlers() {
         // and thus don't want to kill the natural bubbling of event.
         e.preventDefault();
 
-        if (e.type === "keypress" && e.key !== "Enter") {
+        if (e.type === "keypress" && !keydown_util.is_enter_event(e)) {
             return;
         }
         const stream_name = stream_data.maybe_get_stream_name(

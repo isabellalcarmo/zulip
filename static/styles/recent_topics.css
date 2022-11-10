@@ -165,6 +165,8 @@
 
         .unread_mention_info:not(:empty) {
             margin-right: -5px;
+            /* Match with its font-size. */
+            line-height: 14px;
         }
 
         .unread_hidden {
@@ -210,15 +212,14 @@
             opacity: 0.7;
         }
 
+        .recent_topic_actions.dummy_action_button {
+            visibility: hidden;
+        }
+
         .recent_topic_actions .recent_topics_focusable {
             display: flex;
             align-items: center;
             padding-bottom: 3px;
-
-            &.single_action_button {
-                /* 10px of unread count + 23px for bell icon */
-                margin-right: 33px;
-            }
         }
 
         .recent_topics_participants {
@@ -393,11 +394,6 @@
             .recent_topic_actions {
                 margin-right: 5px;
                 font-size: 15px;
-            }
-
-            .unread_count_pm {
-                /* Margin equal to size of recent topic actions */
-                margin-right: 44px;
             }
         }
     }
